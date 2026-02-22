@@ -1,9 +1,7 @@
 name: Android Build
 
 on:
-  workflow_dispatch:
-  push:
-    branches: [ main, master ]
+  workflow_dispatch: # Strict manual trigger only
 
 jobs:
   build-android:
@@ -35,12 +33,13 @@ jobs:
           pip install PyYAML
 
       - name: Generate Binary Asset Manifests
-        run: python3 runtime/generate_assets_header.py
+        # Explicitly running from the repo root where runtime/ exists
+        run: python3 ./runtime/generate_assets_header.py
 
       - name: Generate App Icons
         run: |
           if [ -f "master_icon.png" ]; then
-            python3 runtime/generate_icons.py master_icon.png
+            python3 ./runtime/generate_icons.py master_icon.png
           else
             echo "master_icon.png not found, building with dummy icon"
             mkdir -p Android/app/src/main/res/mipmap-mdpi
@@ -49,15 +48,13 @@ jobs:
           fi
 
       - name: Prepare C++ Source (NDK Bridge)
-        run: python3 runtime/prepare_source.py
+        run: python3 ./runtime/prepare_source.py
 
       - name: Build with Gradle
         run: |
-          # Find gradlew in the Android subfolder
-          GRADLEW_PATH=$(find ./Android -name gradlew)
-          chmod +x "$GRADLEW_PATH"
-          cd $(dirname "$GRADLEW_PATH")
-          # NDK_PATH is usually pre-set on GitHub runners
+          # Ensure we find the gradlew inside the Android folder
+          chmod +x ./Android/gradlew
+          cd Android
           ./gradlew clean assembleDebug --no-daemon --stacktrace
 
       - name: Upload Debug APK
