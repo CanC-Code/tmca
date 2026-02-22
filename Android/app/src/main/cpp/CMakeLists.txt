@@ -1,14 +1,12 @@
 cmake_minimum_required(VERSION 3.22.1)
 project("minish_ndk")
 
-# 1. Broaden the search to include .cpp files and verify the path
-# If your engine is in the root 'src' folder, ensure this path is correct 
-# relative to 'Android/app/src/main/cpp/'
+# 1. Broaden the search to include .c and .cpp files in the project's root src directory
+# Paths are relative to 'Android/app/src/main/cpp/' where this file is located.
+# The project root is four levels up (../../../../)
 file(GLOB_RECURSE ENGINE_SOURCES 
     "../../../../src/*.c"
     "../../../../src/*.cpp"
-    "../../../../tmca/src/*.c"
-    "../../../../tmca/src/*.cpp"
 )
 
 # 2. Add the native JNI wrapper and all discovered engine files
@@ -17,11 +15,11 @@ add_library(minish_ndk SHARED
     ${ENGINE_SOURCES}
 )
 
-# 3. Explicitly add include directories so the compiler can find your headers (.h)
-# This prevents "file not found" errors during the compilation phase
+# 3. Explicitly add include directories so the compiler can find headers
+# Added both 'src' for general implementation and 'include' for definitions
 target_include_directories(minish_ndk PRIVATE 
     ../../../../src
-    ../../../../tmca/src
+    ../../../../include
     . 
 )
 
