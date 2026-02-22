@@ -1,30 +1,48 @@
 import os
 import json
 import subprocess
+import shutil
 
 def run():
     android_dir = "Android"
     
-    # 1. Create settings.gradle if missing to define project structure
+    # 1. Create settings.gradle if missing
     settings_path = os.path.join(android_dir, "settings.gradle")
     if not os.path.exists(settings_path):
+        os.makedirs(android_dir, exist_ok=True)
         with open(settings_path, "w") as f:
             f.write("rootProject.name = 'MinishNDK'\ninclude ':app'\n")
         print("Generated settings.gradle")
 
-    # 2. Setup Gradle Wrapper - Use --no-daemon and avoid full project evaluation
+    # 2. Setup Gradle Wrapper using a 'Clean Room' approach
     if not os.path.exists(os.path.join(android_dir, "gradlew")):
-        print("Bootstrapping Gradle 8.5 wrapper...")
-        # We use '-p' to point to the directory but avoid triggering full plugin loads
+        print("Bootstrapping Gradle 8.5 wrapper (isolated)...")
+        temp_dir = "gradle_bootstrap"
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        # Generate wrapper in an empty directory to avoid Kotlin plugin errors
         subprocess.run([
             "gradle", "wrapper", 
             "--gradle-version", "8.5", 
             "--no-daemon"
-        ], cwd=android_dir, check=True)
+        ], cwd=temp_dir, check=True)
+        
+        # Move generated files to Android directory
+        for item in ["gradlew", "gradlew.bat", "gradle"]:
+            src = os.path.join(temp_dir, item)
+            dst = os.path.join(android_dir, item)
+            if os.path.isdir(src):
+                if os.path.exists(dst): shutil.rmtree(dst)
+                shutil.copytree(src, dst)
+            else:
+                shutil.copy2(src, dst)
+        
+        shutil.rmtree(temp_dir)
+        print("Wrapper successfully isolated and moved.")
 
     # 3. Generate assets.h
     assets_json = "assets/assets.json"
-    output_h = "Android/app/src/main/cpp/assets.h"
+    output_h = os.path.join(android_dir, "app/src/main/cpp/assets.h")
     os.makedirs(os.path.dirname(output_h), exist_ok=True)
     
     asset_entries = []
