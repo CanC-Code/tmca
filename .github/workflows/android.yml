@@ -1,7 +1,7 @@
 name: Android Build
 
 on:
-  workflow_dispatch: # Strict manual trigger only
+  workflow_dispatch:
 
 jobs:
   build-android:
@@ -29,33 +29,22 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y imagemagick ninja-build
+          sudo apt-get install -y imagemagick ninja-build gradle
           pip install PyYAML
 
-      - name: Generate Binary Asset Manifests
-        # Explicitly running from the repo root where runtime/ exists
+      - name: Initialize Project & Assets
+        # This now generates both the Gradle wrapper and assets.h
         run: python3 ./runtime/generate_assets_header.py
-
-      - name: Generate App Icons
-        run: |
-          if [ -f "master_icon.png" ]; then
-            python3 ./runtime/generate_icons.py master_icon.png
-          else
-            echo "master_icon.png not found, building with dummy icon"
-            mkdir -p Android/app/src/main/res/mipmap-mdpi
-            convert -size 48x48 xc:gray Android/app/src/main/res/mipmap-mdpi/ic_launcher.png
-            cp Android/app/src/main/res/mipmap-mdpi/ic_launcher.png Android/app/src/main/res/mipmap-mdpi/ic_launcher_round.png
-          fi
 
       - name: Prepare C++ Source (NDK Bridge)
         run: python3 ./runtime/prepare_source.py
 
       - name: Build with Gradle
         run: |
-          # Ensure we find the gradlew inside the Android folder
-          chmod +x ./Android/gradlew
           cd Android
-          ./gradlew clean assembleDebug --no-daemon --stacktrace
+          # Ensure gradlew is executable even if generated on the fly
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
