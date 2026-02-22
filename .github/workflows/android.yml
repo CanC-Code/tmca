@@ -38,6 +38,12 @@ jobs:
 
       - name: Prepare C++ Source (NDK Bridge)
         run: python3 ./runtime/prepare_source.py
+  
+      - name: Generate Icons
+        run: |
+          chmod +x runtime/generate_icons.sh
+          ./runtime/generate_icons.sh
+
 
       - name: Build with Gradle
         run: |
