@@ -1,7 +1,7 @@
 name: Android Build
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Strict manual trigger only
 
 jobs:
   build-android:
@@ -33,7 +33,7 @@ jobs:
           pip install PyYAML
 
       - name: Initialize Project & Assets
-        # This now generates both the Gradle wrapper and assets.h
+        # Generates Gradle 8.5 wrapper, settings.gradle (if missing), and assets.h
         run: python3 ./runtime/generate_assets_header.py
 
       - name: Prepare C++ Source (NDK Bridge)
@@ -42,9 +42,10 @@ jobs:
       - name: Build with Gradle
         run: |
           cd Android
-          # Ensure gradlew is executable even if generated on the fly
+          # Ensure the wrapper is executable
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          # Explicitly target the app module to resolve 'task not found'
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
