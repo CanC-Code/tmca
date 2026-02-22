@@ -1,0 +1,67 @@
+name: Android Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick ninja-build
+          pip install PyYAML
+
+      - name: Generate Binary Asset Manifests
+        run: python3 runtime/generate_assets_header.py
+
+      - name: Generate App Icons
+        run: |
+          if [ -f "master_icon.png" ]; then
+            python3 runtime/generate_icons.py master_icon.png
+          else
+            echo "master_icon.png not found, building with dummy icon"
+            mkdir -p Android/app/src/main/res/mipmap-mdpi
+            convert -size 48x48 xc:gray Android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+            cp Android/app/src/main/res/mipmap-mdpi/ic_launcher.png Android/app/src/main/res/mipmap-mdpi/ic_launcher_round.png
+          fi
+
+      - name: Prepare C++ Source (NDK Bridge)
+        run: python3 runtime/prepare_source.py
+
+      - name: Build with Gradle
+        run: |
+          # Find gradlew in the Android subfolder
+          GRADLEW_PATH=$(find ./Android -name gradlew)
+          chmod +x "$GRADLEW_PATH"
+          cd $(dirname "$GRADLEW_PATH")
+          # NDK_PATH is usually pre-set on GitHub runners
+          ./gradlew clean assembleDebug --no-daemon --stacktrace
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Minish-NDK-debug-apk
+          path: "Android/app/build/outputs/apk/debug/*.apk"
