@@ -1,15 +1,15 @@
 cmake_minimum_required(VERSION 3.22.1)
 project("minish_ndk")
 
-# Add the tmc source files you reviewed earlier
-file(GLOB_RECURSE GAME_SOURCES 
+# Automatically include all engine source files
+file(GLOB_RECURSE ENGINE_SOURCES 
     "../../../../tmca/src/*.c"
 )
 
 add_library(minish_ndk SHARED 
     native-lib.cpp 
-    ${GAME_SOURCES}
+    ${ENGINE_SOURCES}
 )
 
-target_link_libraries(minish_ndk log android)
-
+# Link Android specific libraries for Bitmap handling and Logging
+target_link_libraries(minish_ndk log android jnigraphics)
