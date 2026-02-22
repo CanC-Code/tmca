@@ -1,10 +1,10 @@
+// Project-level build file
 buildscript {
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
-        // AGP 8.1.0 is required for Java 17
         classpath 'com.android.tools.build:gradle:8.1.0'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.0"
     }
