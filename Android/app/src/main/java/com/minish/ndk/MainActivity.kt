@@ -7,14 +7,13 @@ import android.os.Bundle
 import android.view.Choreographer
 import android.view.SurfaceHolder
 import android.view.SurfaceView
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import java.nio.ByteBuffer
 
 class MainActivity : AppCompatActivity(), SurfaceHolder.Callback, Choreographer.FrameCallback {
 
     private lateinit var surfaceView: SurfaceView
-    private var gameBitmap = Bitmap.createBitmap(240, 160, Bitmap.Config.RGB_565)
+    private lateinit var gameBitmap: Bitmap
     private var isEngineRunning = false
 
     companion object {
@@ -23,22 +22,25 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback, Choreographer.
         }
     }
 
-    private external fun initGameWithRom(fd: Int): Boolean
+    private external fun initGameWithRom(fd: Int)
     private external fun onFrameTick()
-    private external fun getVideoBuffer(): ByteBuffer
+    private external fun copyFrameToBitmap(bitmap: Bitmap)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         surfaceView = SurfaceView(this)
         surfaceView.holder.addCallback(this)
         setContentView(surfaceView)
+
+        // GBA native resolution
+        gameBitmap = Bitmap.createBitmap(240, 160, Bitmap.Config.RGB_565)
         pickRom()
     }
 
     private fun pickRom() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
-            type = "*/*" 
+            type = "*/*"
         }
         startActivityForResult(intent, 1001)
     }
@@ -48,13 +50,10 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback, Choreographer.
         if (requestCode == 1001 && resultCode == Activity.RESULT_OK) {
             data?.data?.let { uri ->
                 val pfd = contentResolver.openFileDescriptor(uri, "r")
-                if (pfd != null) {
-                    if (initGameWithRom(pfd.fd)) {
-                        isEngineRunning = true
-                        Choreographer.getInstance().postFrameCallback(this)
-                    } else {
-                        Toast.makeText(this, "Invalid ROM provided", Toast.LENGTH_LONG).show()
-                    }
+                pfd?.let {
+                    initGameWithRom(it.fd)
+                    isEngineRunning = true
+                    Choreographer.getInstance().postFrameCallback(this)
                 }
             }
         }
@@ -62,17 +61,23 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback, Choreographer.
 
     override fun doFrame(frameTimeNanos: Long) {
         if (!isEngineRunning) return
+        
         onFrameTick()
+        renderToSurface()
+        
+        Choreographer.getInstance().postFrameCallback(this)
+    }
+
+    private fun renderToSurface() {
         val holder = surfaceView.holder
         if (holder.surface.isValid) {
             val canvas = holder.lockCanvas()
-            canvas?.let {
-                gameBitmap.copyPixelsFromBuffer(getVideoBuffer())
-                it.drawBitmap(gameBitmap, null, it.clipBounds, null)
-                holder.unlockCanvasAndPost(it)
+            if (canvas != null) {
+                copyFrameToBitmap(gameBitmap)
+                canvas.drawBitmap(gameBitmap, null, canvas.clipBounds, null)
+                holder.unlockCanvasAndPost(canvas)
             }
         }
-        Choreographer.getInstance().postFrameCallback(this)
     }
 
     override fun surfaceCreated(holder: SurfaceHolder) {}
