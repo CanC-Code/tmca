@@ -8,7 +8,6 @@ import android.view.Choreographer
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import androidx.appcompat.app.AppCompatActivity
-import java.nio.ByteBuffer
 
 class MainActivity : AppCompatActivity(), SurfaceHolder.Callback, Choreographer.FrameCallback {
 
@@ -22,7 +21,8 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback, Choreographer.
         }
     }
 
-    private external fun initGameWithRom(fd: Int)
+    // Pass fd and the path where assets should be extracted
+    private external fun initGameWithRom(fd: Int, internalPath: String)
     private external fun onFrameTick()
     private external fun copyFrameToBitmap(bitmap: Bitmap)
 
@@ -32,7 +32,6 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback, Choreographer.
         surfaceView.holder.addCallback(this)
         setContentView(surfaceView)
 
-        // GBA native resolution
         gameBitmap = Bitmap.createBitmap(240, 160, Bitmap.Config.RGB_565)
         pickRom()
     }
@@ -40,7 +39,7 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback, Choreographer.
     private fun pickRom() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
-            type = "*/*"
+            type = "*/*" 
         }
         startActivityForResult(intent, 1001)
     }
@@ -50,8 +49,9 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback, Choreographer.
         if (requestCode == 1001 && resultCode == Activity.RESULT_OK) {
             data?.data?.let { uri ->
                 val pfd = contentResolver.openFileDescriptor(uri, "r")
-                pfd?.let {
-                    initGameWithRom(it.fd)
+                pfd?.use { 
+                    // Pass the internal files directory for extraction
+                    initGameWithRom(it.fd, filesDir.absolutePath)
                     isEngineRunning = true
                     Choreographer.getInstance().postFrameCallback(this)
                 }
@@ -61,22 +61,18 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback, Choreographer.
 
     override fun doFrame(frameTimeNanos: Long) {
         if (!isEngineRunning) return
-        
         onFrameTick()
-        renderToSurface()
-        
+        renderFrame()
         Choreographer.getInstance().postFrameCallback(this)
     }
 
-    private fun renderToSurface() {
+    private fun renderFrame() {
         val holder = surfaceView.holder
         if (holder.surface.isValid) {
-            val canvas = holder.lockCanvas()
-            if (canvas != null) {
-                copyFrameToBitmap(gameBitmap)
-                canvas.drawBitmap(gameBitmap, null, canvas.clipBounds, null)
-                holder.unlockCanvasAndPost(canvas)
-            }
+            val canvas = holder.lockCanvas() ?: return
+            copyFrameToBitmap(gameBitmap)
+            canvas.drawBitmap(gameBitmap, null, canvas.clipBounds, null)
+            holder.unlockCanvasAndPost(canvas)
         }
     }
 
