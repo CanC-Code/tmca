@@ -37,33 +37,26 @@ jobs:
       - name: Initialize Skeleton Assets (ROM-less Build)
         run: |
           mkdir -p include/assets
-          echo "#ifndef MAP_OFFSETS_H" > include/assets/map_offsets.h
-          echo "#define MAP_OFFSETS_H" >> include/assets/map_offsets.h
-          echo "#endif" >> include/assets/map_offsets.h
-          
-          echo "#ifndef GFX_OFFSETS_H" > include/assets/gfx_offsets.h
-          echo "#define GFX_OFFSETS_H" >> include/assets/gfx_offsets.h
-          echo "#endif" >> include/assets/gfx_offsets.h
-          
-          echo "#ifndef ASSETS_H" > include/assets/assets.h
-          echo "#define ASSETS_H" >> include/assets/assets.h
-          echo "#define ASSET_COUNT 0" >> include/assets/assets.h
-          echo "#endif" >> include/assets/assets.h
+          echo -e "#ifndef MAP_OFFSETS_H\n#define MAP_OFFSETS_H\n#endif" > include/assets/map_offsets.h
+          echo -e "#ifndef GFX_OFFSETS_H\n#define GFX_OFFSETS_H\n#endif" > include/assets/gfx_offsets.h
+          echo -e "#ifndef ASSETS_H\n#define ASSETS_H\n#define ASSET_COUNT 0\n#endif" > include/assets/assets.h
 
       - name: Build Android APK
         run: |
-          cd Android
-          
-          # 1. Generate the wrapper directly in the target folder
-          # Use --project-dir . to ensure it initializes in the current 'Android' directory
-          # We use the system 'gradle' (9.3.1) only to download and set up the 8.10.2 environment
+          # 1. Generate the wrapper in the ROOT directory (where no build.gradle exists)
+          # This prevents Gradle 9 from evaluating the Android project.
           gradle wrapper --gradle-version 8.10.2 --distribution-type all
           
-          # 2. Verify wrapper files exist
-          ls -R gradle/
+          # 2. Move the generated wrapper files into the Android subdirectory
+          # We use -f to overwrite any existing broken wrapper files
+          mv -f gradlew Android/
+          mv -f gradle/ Android/
           
-          # 3. Build using the local (8.10.2) wrapper
+          # 3. Enter the Android directory and use the NEW 8.10.2 wrapper
+          cd Android
           chmod +x gradlew
+          
+          # Use the local wrapper (./gradlew) which is now version 8.10.2
           ./gradlew :app:assembleDebug --no-daemon --info
 
       - name: Upload Debug APK
