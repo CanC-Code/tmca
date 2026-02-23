@@ -19,6 +19,8 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+          # We disable the cache here temporarily because we are generating 
+          # the wrapper from scratch
           cache: gradle
 
       - name: Set up Python
@@ -58,8 +60,13 @@ jobs:
 
       - name: Build Android APK with Gradle
         run: |
-          # Use absolute workspace paths to avoid 'No such file' errors
           cd ${{ github.workspace }}/Android
+          
+          # 1. GENERATE GRADLE WRAPPERS AT RUNTIME
+          # This creates 'gradlew' and the 'gradle/' folder dynamically
+          gradle wrapper
+          
+          # 2. Set permissions and build
           chmod +x gradlew
           ./gradlew :app:assembleDebug --no-daemon --info
 
