@@ -1,3 +1,5 @@
+#include "android_compat.h"
+
 #ifndef GLOBAL_H
 #define GLOBAL_H
 
@@ -25,7 +27,6 @@
  */
 ///@}
 
-#include "android_compat.h"
 
 #include "gba/gba.h"
 #include <string.h>
