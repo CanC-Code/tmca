@@ -16,9 +16,16 @@ android {
 
         externalNativeBuild {
             cmake {
-                cppFlags "-std=c++17"
+                # Pass the alignment and packing flags directly to the NDK
+                cFlags "-fpack-struct=4 -fms-extensions -D_64_BIT"
+                cppFlags "-std=c++17 -fpack-struct=4 -fms-extensions -D_64_BIT"
                 arguments "-DANDROID_STL=c++_shared"
             }
+        }
+
+        ndk {
+            # Focus exclusively on 64-bit ARM to avoid pointer truncation errors
+            abiFilters 'arm64-v8a'
         }
     }
 
@@ -36,9 +43,17 @@ android {
             path "src/main/cpp/CMakeLists.txt"
         }
     }
+    
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
 }
 
 dependencies {
     implementation 'androidx.core:core-ktx:1.12.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.11.0'
 }
