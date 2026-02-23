@@ -16,7 +16,7 @@ android {
 
         externalNativeBuild {
             cmake {
-                # Pass the alignment and packing flags directly to the NDK
+                // Pass the alignment and packing flags directly to the NDK
                 cFlags "-fpack-struct=4 -fms-extensions -D_64_BIT"
                 cppFlags "-std=c++17 -fpack-struct=4 -fms-extensions -D_64_BIT"
                 arguments "-DANDROID_STL=c++_shared"
@@ -24,7 +24,7 @@ android {
         }
 
         ndk {
-            # Focus exclusively on 64-bit ARM to avoid pointer truncation errors
+            // Focus exclusively on 64-bit ARM to avoid pointer truncation errors
             abiFilters 'arm64-v8a'
         }
     }
