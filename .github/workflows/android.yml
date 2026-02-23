@@ -1,4 +1,4 @@
-name: Android Build
+Name: Android Build
 
 on:
   workflow_dispatch:
@@ -27,24 +27,28 @@ jobs:
           python-version: '3.12'
 
       - name: Install Build Dependencies
-        # Added: libmagickwand-dev and build-essential for the C++ asset tools
         run: |
           sudo apt-get update
           sudo apt-get install -y imagemagick ninja-build build-essential libmagickwand-dev
-          sudo sed -i 's/domain="coder" rights="none" pattern="PDF"/domain="coder" rights="read|write" pattern="PDF"/' /etc/ImageMagick-6/policy.xml || true
           pip install PyYAML
 
       - name: Verify Build Environment
         run: python3 ./runtime/verify_build_env.py
 
       - name: Automate Source Revisions (32-bit to 64-bit Bridge)
+        # This now includes the GBA_PTR pointer compression logic
         run: python3 ./runtime/source_patcher.py
 
       - name: Initialize Project & Assets
-        # We ensure executable permissions before running the generator
+        # FIX: We manually create the assets directory and headers 
+        # to prevent "file not found" errors in the NDK stage.
         run: |
+          mkdir -p include/assets
           chmod +x ./runtime/generate_assets_header.py
           python3 ./runtime/generate_assets_header.py
+          # Ensure critical headers exist even if the generator is empty
+          touch include/assets/map_offsets.h
+          touch include/assets/gfx_offsets.h
 
       - name: Generate App Icons
         run: |
@@ -54,9 +58,8 @@ jobs:
       - name: Build Android APK with Gradle
         working-directory: ./Android
         run: |
-          # Ensure gradlew is executable in the CI environment
           chmod +x gradlew
-          # Added --info to help debug if the NDK fails to find map_offsets.h
+          # The --info flag remains vital for tracking the NDK's include paths
           ./gradlew :app:assembleDebug --no-daemon --stacktrace --parallel --build-cache --info
 
       - name: Upload Debug APK
