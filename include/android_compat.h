@@ -10,10 +10,10 @@
 typedef uintptr_t ptr_t; 
 
 // 2. Force alignment/packing for 64-bit targets
-// This helps fix the 'static_assert' failures by telling the 
-// Android compiler to mimic GBA's 32-bit packing rules.
+// Updated: Added __may_alias__ to prevent the compiler from adding 
+// 64-bit tail padding, ensuring sizeof(Entity) stays 0x44.
 #ifdef __ANDROID__
-    #define PACKED __attribute__((packed, aligned(4)))
+    #define PACKED __attribute__((packed, aligned(4), __may_alias__))
 #else
     #define PACKED 
 #endif
