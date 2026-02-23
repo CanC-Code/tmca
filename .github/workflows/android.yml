@@ -66,7 +66,8 @@ jobs:
       - name: Build Android APK with Gradle
         working-directory: ./Android
         run: |
-          chmod +x gradlew
+          # FIX: Ensure we use the correct relative path for chmod within the working directory
+          chmod +x ./gradlew
           ./gradlew :app:assembleDebug --no-daemon --info
 
       - name: Upload Debug APK
