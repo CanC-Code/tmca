@@ -43,20 +43,23 @@ jobs:
 
       - name: Build Android APK
         run: |
-          # 1. Generate the wrapper in the ROOT directory (where no build.gradle exists)
-          # This prevents Gradle 9 from evaluating the Android project.
+          # 1. Create a dummy settings file in the root to satisfy Gradle 9
+          echo "" > settings.gradle
+          
+          # 2. Generate the wrapper at the compatible version (8.10.2)
+          # Since settings.gradle is empty, Gradle 9 won't try to load your Android project
           gradle wrapper --gradle-version 8.10.2 --distribution-type all
           
-          # 2. Move the generated wrapper files into the Android subdirectory
-          # We use -f to overwrite any existing broken wrapper files
+          # 3. Move the wrapper into the Android folder
           mv -f gradlew Android/
           mv -f gradle/ Android/
           
-          # 3. Enter the Android directory and use the NEW 8.10.2 wrapper
+          # 4. Clean up dummy root file
+          rm settings.gradle
+          
+          # 5. Enter Android folder and build
           cd Android
           chmod +x gradlew
-          
-          # Use the local wrapper (./gradlew) which is now version 8.10.2
           ./gradlew :app:assembleDebug --no-daemon --info
 
       - name: Upload Debug APK
