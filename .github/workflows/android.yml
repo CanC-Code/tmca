@@ -52,21 +52,18 @@ jobs:
 
       - name: Build Android APK
         run: |
-          # 1. Create a temporary 'safe' directory to generate the wrapper
-          # This prevents Gradle 9 from looking at your incompatible build scripts
-          mkdir -p temp_gradle
-          cd temp_gradle
-          gradle wrapper --gradle-version 8.10.2
+          cd Android
           
-          # 2. Move the generated wrapper files to your Android folder
-          cp gradlew ../Android/
-          cp -r gradle ../Android/
+          # 1. Generate the wrapper directly in the target folder
+          # Use --project-dir . to ensure it initializes in the current 'Android' directory
+          # We use the system 'gradle' (9.3.1) only to download and set up the 8.10.2 environment
+          gradle wrapper --gradle-version 8.10.2 --distribution-type all
           
-          # 3. Enter the actual Android directory
-          cd ../Android
+          # 2. Verify wrapper files exist
+          ls -R gradle/
+          
+          # 3. Build using the local (8.10.2) wrapper
           chmod +x gradlew
-          
-          # 4. Build using the local (8.10.2) wrapper, NOT the system gradle
           ./gradlew :app:assembleDebug --no-daemon --info
 
       - name: Upload Debug APK
