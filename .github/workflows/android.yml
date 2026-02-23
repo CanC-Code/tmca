@@ -52,15 +52,25 @@ jobs:
 
       - name: Build Android APK
         run: |
-          # 1. Generate the wrapper WITHOUT evaluating the Android project
-          # We run this from the root so Gradle doesn't try to parse Android/build.gradle with the wrong version
-          gradle wrapper --gradle-version 8.10.2 --distribution-type bin
+          # 1. Create a temporary 'safe' directory to generate the wrapper
+          # This prevents Gradle 9 from looking at your incompatible build scripts
+          mkdir -p temp_gradle
+          cd temp_gradle
+          gradle wrapper --gradle-version 8.10.2
           
-          # 2. Move the generated files into the Android folder where they belong
-          mv gradlew Android/
-          mv gradle/ Android/
+          # 2. Move the generated wrapper files to your Android folder
+          cp gradlew ../Android/
+          cp -r gradle ../Android/
           
-          # 3. Enter the directory and build using the NEWLY generated 8.10.2 wrapper
-          cd Android
+          # 3. Enter the actual Android directory
+          cd ../Android
           chmod +x gradlew
+          
+          # 4. Build using the local (8.10.2) wrapper, NOT the system gradle
           ./gradlew :app:assembleDebug --no-daemon --info
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Minish-NDK-debug-apk
+          path: Android/app/build/outputs/apk/debug/app-debug.apk
