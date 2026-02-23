@@ -19,7 +19,6 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-          cache: gradle
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -51,26 +50,17 @@ jobs:
           echo "#define ASSET_COUNT 0" >> include/assets/assets.h
           echo "#endif" >> include/assets/assets.h
 
-      - name: Generate App Icons
+      - name: Build Android APK
         run: |
-          chmod +x runtime/generate_icons.sh
-          ./runtime/generate_icons.sh || true
-
-      - name: Build Android APK with Gradle
-        run: |
-          cd ${{ github.workspace }}/Android
+          # 1. Generate the wrapper WITHOUT evaluating the Android project
+          # We run this from the root so Gradle doesn't try to parse Android/build.gradle with the wrong version
+          gradle wrapper --gradle-version 8.10.2 --distribution-type bin
           
-          # 1. GENERATE COMPATIBLE GRADLE WRAPPER
-          # Gradle 9 is too new for most current AGP versions. 
-          # Pinning to 8.10.2 ensures compatibility with JDK 17 and AGP 8.x.
-          gradle wrapper --gradle-version 8.10.2
+          # 2. Move the generated files into the Android folder where they belong
+          mv gradlew Android/
+          mv gradle/ Android/
           
-          # 2. Set permissions and build
+          # 3. Enter the directory and build using the NEWLY generated 8.10.2 wrapper
+          cd Android
           chmod +x gradlew
           ./gradlew :app:assembleDebug --no-daemon --info
-
-      - name: Upload Debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: Minish-NDK-debug-apk
-          path: Android/app/build/outputs/apk/debug/app-debug.apk
