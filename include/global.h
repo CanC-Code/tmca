@@ -25,6 +25,8 @@
  */
 ///@}
 
+#include "android_compat.h"
+
 #include "gba/gba.h"
 #include <string.h>
 
