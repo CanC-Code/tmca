@@ -1,73 +1,34 @@
-import os
-import re
+#ifndef ANDROID_COMPAT_H
+#define ANDROID_COMPAT_H
 
-# Set paths relative to the current working directory (Repository Root)
-SRC_DIR = "src"
-INC_DIR = "include"
+#include <stdint.h>
+#include <stddef.h>
 
-def patch_global_h():
-    path = os.path.join(INC_DIR, "global.h")
-    if not os.path.exists(path):
-        print(f"Skipping: {path} not found.")
-        return
+// 1. Handle Pointer-Width Integers
+// ptr_t is used for active calculations on the 64-bit host.
+typedef uintptr_t ptr_t; 
 
-    with open(path, 'r') as f:
-        content = f.read()
+// 2. Pointer Compression (The "Gold" Fix)
+// GBA_PTR(type) ensures that pointers stored inside structs take up 
+// only 4 bytes (uint32_t) on Android, preventing struct inflation.
+#ifdef __ANDROID__
+    #define PACKED __attribute__((packed, aligned(1), __may_alias__))
+    #define GBA_PTR(type) uint32_t
+#else
+    #define PACKED 
+    #define GBA_PTR(type) type*
+#endif
 
-    # Ensure compat header is the very first line
-    if 'include "android_compat.h"' not in content:
-        content = '#include "android_compat.h"\n' + content
-        with open(path, 'w') as f:
-            f.write(content)
-        print(f"Patched {path}")
+// 3. Fix for 'illegal lvalue cast'
+// Standardizes pointer arithmetic to be 64-bit safe.
+#define ADVANCE_PTR(ptr, bytes) (ptr = (void*)((uintptr_t)(ptr) + (bytes)))
 
-def patch_lvalue_casts():
-    # Targets patterns like (u8*)d += offset;
-    # Replaces with ADVANCE_PTR(d, offset);
-    pattern = re.compile(r'\((u8|u16|u32|void)\*\)\s*(\w+)\s*\+=\s*([^;]+);')
+// 4. Standard GBA Types
+typedef uint32_t u32;
+typedef uint16_t u16;
+typedef uint8_t  u8;
+typedef int32_t  s32;
+typedef int16_t  s16;
+typedef int8_t   s8;
 
-    if not os.path.exists(SRC_DIR):
-        print(f"Skipping: {SRC_DIR} directory not found.")
-        return
-
-    for root, _, files in os.walk(SRC_DIR):
-        for file in files:
-            if file.endswith(('.c', '.cpp')):
-                path = os.path.join(root, file)
-                with open(path, 'r') as f:
-                    content = f.read()
-
-                new_content = pattern.sub(r'ADVANCE_PTR(\2, \3);', content)
-
-                if new_content != content:
-                    with open(path, 'w') as f:
-                        f.write(new_content)
-                    print(f"Fixed lvalue casts in {path}")
-
-def patch_struct_packing():
-    # Finds structs that are followed by static_assert and adds PACKED
-    # Target: typedef struct { ... } Name; static_assert(sizeof(Name) == ...);
-    pattern = re.compile(r'(typedef\s+struct\s*\{.*?\})\s*(\w+)\s*;\s*static_assert', re.DOTALL)
-
-    if not os.path.exists(INC_DIR):
-        print(f"Skipping: {INC_DIR} directory not found.")
-        return
-
-    for root, _, files in os.walk(INC_DIR):
-        for file in files:
-            if file.endswith('.h'):
-                path = os.path.join(root, file)
-                with open(path, 'r') as f:
-                    content = f.read()
-
-                new_content = pattern.sub(r'\1 PACKED \2; static_assert', content)
-
-                if new_content != content:
-                    with open(path, 'w') as f:
-                        f.write(new_content)
-                    print(f"Applied PACKED to structs in {path}")
-
-if __name__ == "__main__":
-    patch_global_h()
-    patch_lvalue_casts()
-    patch_struct_packing()
+#endif // ANDROID_COMPAT_H
