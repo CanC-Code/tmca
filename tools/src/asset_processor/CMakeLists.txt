@@ -1,9 +1,27 @@
-# Use a specific list of sources instead of GLOB to ensure build consistency
+cmake_minimum_required(VERSION 3.22.1)
+project(asset_processor)
+
+# Handle external dependencies via FetchContent
+include(FetchContent)
+
+FetchContent_Declare(
+  fmt
+  GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+  GIT_TAG 10.1.1
+)
+FetchContent_MakeAvailable(fmt)
+
+FetchContent_Declare(
+  nlohmann_json
+  URL https://github.com/nlohmann/json/releases/download/v3.11.2/json.tar.xz
+)
+FetchContent_MakeAvailable(nlohmann_json)
+
+# Use explicit sources for stability
 set(ASSET_PROCESSOR_SOURCES
     main.cpp
     offsets.cpp
     util.cpp
-    # Sub-component processors
     assets/aif.cpp
     assets/animation.cpp
     assets/asset.cpp
@@ -20,20 +38,14 @@ set(ASSET_PROCESSOR_SOURCES
 
 add_executable(asset_processor ${ASSET_PROCESSOR_SOURCES})
 
-# Include both the tool root and the assets subfolder for headers
-target_include_directories(asset_processor PRIVATE 
-    .
-    assets
-)
+target_include_directories(asset_processor PRIVATE . assets)
 
-# Linking dependencies
+# Link dependencies, including the newly fetched fmt and json
 target_link_libraries(asset_processor PRIVATE 
-    project_settings
     fmt::fmt 
     nlohmann_json::nlohmann_json 
     filesystem 
     util
 )
 
-# Standard installation to bin directory
 install(TARGETS asset_processor RUNTIME DESTINATION bin)
