@@ -1,9 +1,11 @@
 cmake_minimum_required(VERSION 3.22.1)
 project(asset_processor)
 
-# Handle external dependencies via FetchContent
+# 1. Handle External Dependencies
+# This solves the "Target fmt::fmt not found" error in your log
 include(FetchContent)
 
+# Fetch {fmt} for high-performance formatting
 FetchContent_Declare(
   fmt
   GIT_REPOSITORY https://github.com/fmtlib/fmt.git
@@ -11,13 +13,15 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(fmt)
 
+# Fetch nlohmann_json for JSON parsing
 FetchContent_Declare(
   nlohmann_json
   URL https://github.com/nlohmann/json/releases/download/v3.11.2/json.tar.xz
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
-# Use explicit sources for stability
+# 2. Explicit Source Management
+# We list every file to ensure the compiler finds the asset-specific logic
 set(ASSET_PROCESSOR_SOURCES
     main.cpp
     offsets.cpp
@@ -36,16 +40,23 @@ set(ASSET_PROCESSOR_SOURCES
     assets/subtileset.cpp
 )
 
+# 3. Build the Executable
 add_executable(asset_processor ${ASSET_PROCESSOR_SOURCES})
 
-target_include_directories(asset_processor PRIVATE . assets)
+# Ensure the compiler can find headers in both the root and assets folders
+target_include_directories(asset_processor PRIVATE 
+    . 
+    assets
+)
 
-# Link dependencies, including the newly fetched fmt and json
+# 4. Linking
+# Link the libraries we just fetched along with standard C++ filesystem
 target_link_libraries(asset_processor PRIVATE 
     fmt::fmt 
     nlohmann_json::nlohmann_json 
-    filesystem 
+    stdc++fs # Required for older compilers to use std::filesystem
     util
 )
 
+# 5. Deployment
 install(TARGETS asset_processor RUNTIME DESTINATION bin)
