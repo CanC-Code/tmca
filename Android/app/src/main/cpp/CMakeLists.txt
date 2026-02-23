@@ -1,60 +1,41 @@
 cmake_minimum_required(VERSION 3.22.1)
 project("minish_ndk")
 
-# -------------------------------------------------------------------------
-# 1. Path & Environment Setup
-# -------------------------------------------------------------------------
+# 1. Path Calculation
 set(PROJECT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../")
 set(ASSET_OUT_DIR "${PROJECT_ROOT}/include/assets")
-
-# Ensure the asset output directory exists so the Android build can find it
 file(MAKE_DIRECTORY ${ASSET_OUT_DIR})
 
-# -------------------------------------------------------------------------
-# 2. Phase One: Build the Host Tools (Asset Processor)
-# -------------------------------------------------------------------------
-# We wrap this in a check for CMAKE_CROSSCOMPILING. 
-# The asset_processor must be built with a HOST compiler (Linux/Mac/Windows), 
-# not the Android NDK compiler, to generate headers during the build.
-# -------------------------------------------------------------------------
+# 2. Build Host Tools (ONLY if not cross-compiling for Android)
+# This prevents the NDK from trying to build PC tools with a phone compiler
 if(NOT CMAKE_CROSSCOMPILING)
     add_subdirectory("${PROJECT_ROOT}/tools/src/asset_processor" "${CMAKE_CURRENT_BINARY_DIR}/asset_processor_build")
 
-    # Define the generation command to produce required headers
     add_custom_command(
         OUTPUT "${ASSET_OUT_DIR}/map_offsets.h" "${ASSET_OUT_DIR}/gfx_offsets.h"
         COMMAND asset_processor --input "${PROJECT_ROOT}/assets" --output "${ASSET_OUT_DIR}"
         DEPENDS asset_processor
-        COMMENT "Running runtime asset processor to generate offset headers..."
+        COMMENT "Generating GBA asset offset headers..."
     )
-    
-    # Create a target for the headers
+
     add_custom_target(generate_assets_headers DEPENDS "${ASSET_OUT_DIR}/map_offsets.h")
 endif()
 
-# -------------------------------------------------------------------------
-# 3. Phase Two: Android Library Compilation
-# -------------------------------------------------------------------------
+# 3. Android Library Target
 add_library(minish_ndk SHARED native-lib.cpp)
 
-# Collect all engine sources
 file(GLOB_RECURSE ENGINE_SOURCES 
     "${PROJECT_ROOT}/src/*.c"
     "${PROJECT_ROOT}/src/*.cpp"
 )
 target_sources(minish_ndk PRIVATE ${ENGINE_SOURCES})
 
-# -------------------------------------------------------------------------
-# 4. Phase Three: Architecture & Compatibility Fixes
-# -------------------------------------------------------------------------
-# 
-# -fpack-struct=4: Fixes static_asserts by forcing 32-bit alignment logic.
-# -fms-extensions: Fixes "assignment to cast is illegal" (lvalue cast) errors.
+# 4. Mandatory Compatibility Flags (The "Surgery")
 target_compile_options(minish_ndk PRIVATE 
-    -fpack-struct=4          
+    -fpack-struct=4          # Fixes structure size mismatch
     -Wno-error=address-of-packed-member
-    -fms-extensions          
-    -D_64_BIT                
+    -fms-extensions          # Fixes illegal lvalue casts in engine files
+    -D_64_BIT                # Signals code to use 64-bit safe logic
 )
 
 target_include_directories(minish_ndk PRIVATE 
@@ -63,14 +44,12 @@ target_include_directories(minish_ndk PRIVATE
     . 
 )
 
-# If we are building on the host, ensure headers are generated before the library
+# 5. Dependency Sync
 if(TARGET generate_assets_headers)
     add_dependencies(minish_ndk generate_assets_headers)
 endif()
 
-# -------------------------------------------------------------------------
-# 5. Linking
-# -------------------------------------------------------------------------
+# 6. Linking Android System Libraries
 target_link_libraries(minish_ndk 
     log 
     android 
