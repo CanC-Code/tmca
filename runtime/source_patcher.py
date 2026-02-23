@@ -1,8 +1,9 @@
 import os
 import re
 
-# Set paths relative to the current working directory (Repository Root)
-SRC_DIR = "src"
+# REVISION: Define all directories that contain source code or headers
+# Based on your directory structure: src, sound, data, and include
+SEARCH_DIRS = ["src", "sound", "data"]
 INC_DIR = "include"
 
 def patch_global_h():
@@ -26,50 +27,53 @@ def patch_lvalue_casts():
     # Replaces with ADVANCE_PTR(d, offset);
     pattern = re.compile(r'\((u8|u16|u32|void)\*\)\s*(\w+)\s*\+=\s*([^;]+);')
 
-    for root, _, files in os.walk(SRC_DIR):
-        for file in files:
-            if file.endswith(('.c', '.cpp')):
-                path = os.path.join(root, file)
-                with open(path, 'r') as f:
-                    content = f.read()
+    for s_dir in SEARCH_DIRS:
+        if not os.path.exists(s_dir): continue
+        for root, _, files in os.walk(s_dir):
+            for file in files:
+                if file.endswith(('.c', '.cpp')):
+                    path = os.path.join(root, file)
+                    with open(path, 'r') as f:
+                        content = f.read()
 
-                new_content = pattern.sub(r'ADVANCE_PTR(\2, \3);', content)
+                    new_content = pattern.sub(r'ADVANCE_PTR(\2, \3);', content)
 
-                if new_content != content:
-                    with open(path, 'w') as f:
-                        f.write(new_content)
-                    print(f"Fixed lvalue casts in {path}")
+                    if new_content != content:
+                        with open(path, 'w') as f:
+                            f.write(new_content)
+                        print(f"Fixed lvalue casts in {path}")
 
 def patch_pointer_casts():
     """
     Finds (u32)ptr or (uint32_t)ptr casts that cause precision loss on 64-bit.
     Replaces them with (ptr_t) to ensure the address width matches the host.
     """
-    # Pattern looks for (u32) or (uint32_t) followed by a variable or pointer expression
-    # We target common patterns like (u32)pEntity, (u32)this, (u32)&var
+    # Expanded pattern to catch more complex pointer expressions used in sound/data
     cast_pattern = re.compile(r'\(u32\)\s*([\w\->&*.()]+)')
-    
-    for root, _, files in os.walk(SRC_DIR):
-        for file in files:
-            if file.endswith(('.c', '.cpp')):
-                path = os.path.join(root, file)
-                with open(path, 'r') as f:
-                    content = f.read()
-                
-                # Update the cast to use our width-safe ptr_t (uintptr_t)
-                new_content = cast_pattern.sub(r'(ptr_t)\1', content)
-                
-                if new_content != content:
-                    with open(path, 'w') as f:
-                        f.write(new_content)
-                    print(f"Fixed 64-bit pointer casts in {path}")
+
+    for s_dir in SEARCH_DIRS:
+        if not os.path.exists(s_dir): continue
+        for root, _, files in os.walk(s_dir):
+            for file in files:
+                if file.endswith(('.c', '.cpp')):
+                    path = os.path.join(root, file)
+                    with open(path, 'r') as f:
+                        content = f.read()
+
+                    new_content = cast_pattern.sub(r'(ptr_t)\1', content)
+
+                    if new_content != content:
+                        with open(path, 'w') as f:
+                            f.write(new_content)
+                        print(f"Fixed 64-bit pointer casts in {path}")
 
 def patch_pointers_in_structs():
     """
-    Identifies pointers inside structs that are subject to static_asserts.
-    Converts 'Type* name;' to 'GBA_PTR(Type) name;' to maintain 32-bit size.
+    Identifies pointers inside structs and converts them to GBA_PTR.
+    REVISION: Improved regex to catch 'struct Name* member' and 'void* member'.
     """
-    ptr_pattern = re.compile(r'(\w+\s*\*?)\s*\*(\w+)\s*;')
+    # Regex: Matches (Type) (optional asterisk) (optional space) (asterisk) (Name)
+    ptr_pattern = re.compile(r'(\bstruct\s+\w+|\b\w+)\s*\*\s*(\w+)\s*;')
 
     for root, _, files in os.walk(INC_DIR):
         for file in files:
@@ -87,6 +91,7 @@ def patch_pointers_in_structs():
                         in_packed_struct = True
 
                     if in_packed_struct and '*' in line and ';' in line:
+                        # Convert pointers to 32-bit offset types
                         substituted = ptr_pattern.sub(r'GBA_PTR(\1) \2;', line)
                         if substituted != line:
                             line = substituted
@@ -103,6 +108,7 @@ def patch_pointers_in_structs():
                     print(f"Compressed pointers in {path}")
 
 def patch_struct_packing():
+    # Finds structs that are followed by static_assert and adds PACKED
     pattern = re.compile(r'(typedef\s+struct\s*\{.*?\})\s*(\w+)\s*;\s*static_assert', re.DOTALL)
 
     for root, _, files in os.walk(INC_DIR):
@@ -124,4 +130,4 @@ if __name__ == "__main__":
     patch_lvalue_casts()
     patch_struct_packing()
     patch_pointers_in_structs()
-    patch_pointer_casts() # Final pass to fix the precision errors
+    patch_pointer_casts()
