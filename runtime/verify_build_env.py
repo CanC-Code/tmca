@@ -11,16 +11,22 @@ REQUIRED_FILES = [
 def check_env():
     print("--- Verifying Build Environment ---")
     missing = False
+    
+    # Get the root directory (current working directory in GitHub Actions)
+    root_dir = os.getcwd()
+    
     for f in REQUIRED_FILES:
-        full_path = os.path.join("..", f)
+        # Look for the file relative to the root, not the parent of the root
+        full_path = os.path.join(root_dir, f)
+        
         if os.path.exists(full_path):
             print(f"[OK] Found {f}")
         else:
             print(f"[ERROR] Missing {f}")
             missing = True
-    
+
     if missing:
-        print("\nFix: Ensure all summarized CMake and Header files are placed correctly.")
+        print("\nFix: Ensure files are committed to the repository at the correct paths.")
         sys.exit(1)
     print("--- Environment Ready ---\n")
 
