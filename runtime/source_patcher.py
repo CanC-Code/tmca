@@ -20,7 +20,7 @@ def patch_source():
         with open(global_h, "r") as f:
             content = f.read()
         
-        # Use NDK-safe _Static_assert to fix 'storage size isn't constant' errors
+        # Use NDK-safe _Static_assert
         old_assert = r'#define\s+static_assert\(cond\)\s+extern\s+char\s+assertion\[\(cond\)\s*\?\s*1\s*:\s*-1\]'
         new_assert = '#define static_assert(cond) _Static_assert(cond, "Dimension Mismatch")'
         content = re.sub(old_assert, new_assert, content)
@@ -32,7 +32,7 @@ def patch_source():
             f.write(content)
 
     # 3. Universal Header Scan for struct sizes (RoomVars, Entity, etc.)
-    # Relaxes '==' to '>=' for 64-bit pointer growth
+    # This relaxes '==' to '>=' to allow for 64-bit pointer/padding growth
     include_dir = "include"
     if os.path.exists(include_dir):
         for root, _, files in os.walk(include_dir):
@@ -53,8 +53,8 @@ def patch_source():
                         with open(path, "w") as f:
                             f.write(new_h)
 
-    # 4. FIX: Pointer Truncation (src/*.c)
-    # Fixed the regex error by escaping the hyphen (\-)
+    # 4. FIX: Pointer Truncation Precision Loss (src/*.c)
+    # This specifically fixes the "bad character range" regex error
     src_dir = "src"
     if os.path.exists(src_dir):
         for root, _, files in os.walk(src_dir):
@@ -64,8 +64,7 @@ def patch_source():
                     with open(path, "r") as f:
                         c_content = f.read()
                     
-                    # Fixed Regex: Matches (u32)some_ptr or (u32)this->field
-                    # Hyphen is escaped to avoid "bad character range" error
+                    # Fixed Regex: Escaped the hyphen (\-) and handled pointer access (->)
                     new_c = re.sub(r'\(u32\)\s*([a-zA-Z_][a-zA-Z0-9_>\-]*)', r'(uintptr_t)(\1)', c_content)
                     
                     if new_c != c_content:
