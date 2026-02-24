@@ -31,8 +31,8 @@ def patch_source():
         with open(global_h, "w") as f:
             f.write(content)
 
-    # 3. FIX: Universal Header Scan for struct sizes (RoomVars, Entity, etc.)
-    # This relaxes '==' to '>=' to allow for 64-bit pointer/padding growth
+    # 3. Universal Header Scan for struct sizes (RoomVars, Entity, etc.)
+    # Relaxes '==' to '>=' for 64-bit pointer growth
     include_dir = "include"
     if os.path.exists(include_dir):
         for root, _, files in os.walk(include_dir):
@@ -42,7 +42,7 @@ def patch_source():
                     with open(path, "r") as f:
                         h_content = f.read()
                     
-                    # Target all sizeof assertions (handles 0xCC, 204, 184, etc.)
+                    # Target sizeof assertions (handles 0xCC, 204, 184, etc.)
                     new_h = re.sub(
                         r'static_assert\s*\(\s*sizeof\s*\((.*?)\)\s*==\s*([0-9a-zA-ZxX]+)\s*\)',
                         r'static_assert(sizeof(\1) >= \2)',
@@ -53,8 +53,8 @@ def patch_source():
                         with open(path, "w") as f:
                             f.write(new_h)
 
-    # 4. FIX: Pointer Truncation Precision Loss (src/*.c)
-    # Replaces (u32)pointer_cast with (uintptr_t) to fix 'loses precision' errors
+    # 4. FIX: Pointer Truncation (src/*.c)
+    # Fixed the regex error by escaping the hyphen (\-)
     src_dir = "src"
     if os.path.exists(src_dir):
         for root, _, files in os.walk(src_dir):
@@ -64,14 +64,15 @@ def patch_source():
                     with open(path, "r") as f:
                         c_content = f.read()
                     
-                    # Matches patterns like (u32)some_ptr or (u32)this->field
-                    new_c = re.sub(r'\(u32\)\s*([a-zA-Z_][a-zA-Z0-9_->]*)', r'(uintptr_t)(\1)', c_content)
+                    # Fixed Regex: Matches (u32)some_ptr or (u32)this->field
+                    # Hyphen is escaped to avoid "bad character range" error
+                    new_c = re.sub(r'\(u32\)\s*([a-zA-Z_][a-zA-Z0-9_>\-]*)', r'(uintptr_t)(\1)', c_content)
                     
                     if new_c != c_content:
                         with open(path, "w") as f:
                             f.write(new_c)
 
-    print("64-bit Porting Patch Applied (Universal Struct & Pointer Fix).")
+    print("64-bit Porting Patch Applied Successfully.")
 
 if __name__ == "__main__":
     patch_source()
