@@ -37,12 +37,16 @@ jobs:
       - name: Automate Source Revisions (32-bit to 64-bit Bridge)
         run: python3 ./runtime/source_patcher.py
 
-      - name: Initialize Skeleton Assets (ROM-less Build)
+      - name: Generate Asset Offset Headers
+        # The tools/ directory contains the tmc asset extractor. Running
+        # `make extract_assets` reads assets/gfx.json and assets/map.json
+        # (already in the repo — no ROM required) and writes the real
+        # gfx_offsets.h and map_offsets.h with the USA ROM byte offsets.
+        # These are compile-time constants; the ROM itself is not needed at
+        # build time — only at runtime when the user loads it via SAF.
         run: |
-          mkdir -p include/assets
-          echo -e "#ifndef MAP_OFFSETS_H\n#define MAP_OFFSETS_H\n#endif" > include/assets/map_offsets.h
-          echo -e "#ifndef GFX_OFFSETS_H\n#define GFX_OFFSETS_H\n#endif" > include/assets/gfx_offsets.h
-          echo -e "#ifndef ASSETS_H\n#define ASSETS_H\n#define ASSET_COUNT 0\n#endif" > include/assets/assets.h
+          pip install pillow
+          make extract_assets GAME_VERSION=USA
 
       # ── THIS STEP WAS MISSING — it must run before assembleDebug ──────────
       # AAPT2 fails at processDebugResources if mipmap/ic_launcher is absent.
