@@ -4,14 +4,13 @@ runtime/source_patcher.py
 
 Responsibility: 
 1. Fix 64-bit C compliance (pointers, casts, assertions).
-2. Stub asset headers, translation binaries, and build sentinels.
+2. Stub asset headers, translation binaries, and all build sentinels.
 3. Neuter devkitPro and skip all C++ tool execution.
 """
 
 import os
 import re
 import sys
-from pathlib import Path
 
 def read_file(path: str) -> str:
     if not os.path.exists(path): return ""
@@ -41,8 +40,8 @@ def patch_makefiles():
             content = read_file(mf_path)
             content = content.replace("build: tools", "build:")
             content = content.replace("extract_assets: tools", "extract_assets:")
-            # Comment out tool binary calls
-            content = content.replace("\ttools/bin/", "\t# tools/bin/")
+            # Comment out tool binary calls (any line starting with a tab and tools/bin)
+            content = re.sub(r'^\ttools/bin/', '\t# tools/bin/', content, flags=re.MULTILINE)
             content = content.replace("\tcmake", "\t# cmake")
             write_file(mf_path, content)
             print(f"  [PATCHED] {mf_path}")
@@ -65,19 +64,22 @@ def stub_build_artifacts(include_dir: str = "include"):
         if not os.path.exists(path):
             write_file(path, "\x00" * 4)
 
-    # 3. Build Sentinels (Fixes: build/USA/extracted_assets_USA error)
-    # This tricks Make into thinking asset_processor already ran.
-    for region in ["USA", "EU", "JP"]:
+    # 3. Build Sentinels (Fixes: extracted_assets and converted_assets errors)
+    for region in ["USA", "EU", "JP", "DEMO_USA", "DEMO_JP"]:
         sentinel_dir = f"build/{region}"
-        os.makedirs(sentinel_dir, exist_ok=True)
-        # Create the sentinel file
-        sentinel_file = os.path.join(sentinel_dir, f"extracted_assets_{region}")
-        if not os.path.exists(sentinel_file):
-            write_file(sentinel_file, "Stubbed by patcher")
-            print(f"  [SENTINEL] {sentinel_file}")
-        
-        # Ensure the assets subdirectory exists so the compiler can find the includes
         os.makedirs(os.path.join(sentinel_dir, "assets"), exist_ok=True)
+        
+        # Sentinels used by GBA.mk to track progress
+        sentinels = [
+            f"extracted_assets_{region}",
+            f"converted_assets_{region}"
+        ]
+        
+        for s in sentinels:
+            path = os.path.join(sentinel_dir, s)
+            if not os.path.exists(path):
+                write_file(path, "Stubbed")
+                print(f"  [SENTINEL] {path}")
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 1-6. 64-bit Porting Logic
