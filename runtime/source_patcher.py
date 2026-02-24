@@ -200,6 +200,108 @@ def patch_u32_casts(src_dir: str = "src") -> None:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# 5. Guard the PACKED macro in gba/defines.h
+#
+#    android_compat.h defines PACKED with the Android-safe form:
+#      __attribute__((packed, aligned(1), __may_alias__))
+#    gba/defines.h then unconditionally redefines it with the weaker GBA form:
+#      __attribute__((packed))
+#    This generates a -Wmacro-redefined warning on every TU and silently
+#    drops the __may_alias__ attribute, which can cause UB on aliased reads.
+#    Fix: wrap gba/defines.h's definition in #ifndef PACKED / #endif so the
+#    compat version wins when android_compat.h is included first.
+# ──────────────────────────────────────────────────────────────────────────────
+
+GBA_PACKED_RE = re.compile(
+    r'^(#define\s+PACKED\s+__attribute__\s*\(\s*\(packed\)\s*\))',
+    re.MULTILINE
+)
+
+def patch_gba_defines_h(include_dir: str = "include") -> None:
+    path = os.path.join(include_dir, "gba", "defines.h")
+    if not os.path.exists(path):
+        print(f"  [skip]    {path}  (not found)")
+        return
+
+    try:
+        content = read_file(path)
+        original = content
+
+        # Idempotency guard
+        if "#ifndef PACKED" in content:
+            print(f"  [skip]    {path}  (already patched)")
+            return
+
+        patched = GBA_PACKED_RE.sub(
+            r'#ifndef PACKED\n\1\n#endif',
+            content
+        )
+        patch_summary(path, original, patched)
+        if patched != content:
+            write_file(path, patched)
+
+    except Exception as exc:
+        print(f"  [ERROR]   {path}: {exc}", file=sys.stderr)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 6. Rewrite lvalue casts in src/affine.c (and any other files)
+#
+#    GBA-era GCC allowed using a cast as an lvalue:
+#      (u8*)ptr += n;
+#    Clang strictly rejects this: "assignment to cast is illegal, lvalue
+#    casts are not supported".
+#    android_compat.h already provides ADVANCE_PTR(ptr, n) for exactly this.
+#    This step rewrites every occurrence to the macro form, or equivalently
+#    to the explicit void* cast form that clang accepts.
+#
+#    Pattern matched:
+#      (TYPE*)expr += expr2;
+#    Replacement:
+#      expr = (void*)((TYPE*)expr + expr2);
+# ──────────────────────────────────────────────────────────────────────────────
+
+LVALUE_CAST_RE = re.compile(
+    r'\(\s*([A-Za-z_][A-Za-z0-9_\s*]*?)\s*\*\s*\)\s*'   # (TYPE*)
+    r'([A-Za-z_][A-Za-z0-9_.>-]*)'                        # expr (lvalue)
+    r'\s*\+=\s*'                                           # +=
+    r'([^;]+?)\s*;',                                       # rhs ;
+    re.MULTILINE
+)
+
+def _rewrite_lvalue_cast(m: re.Match) -> str:
+    typ  = m.group(1).strip()
+    expr = m.group(2).strip()
+    rhs  = m.group(3).strip()
+    return f'{expr} = (void*)(({typ}*){expr} + ({rhs}));'
+
+def patch_lvalue_casts(src_dir: str = "src") -> None:
+    if not os.path.isdir(src_dir):
+        print(f"  [skip]    {src_dir}/  (directory not found)")
+        return
+
+    for root, _dirs, files in os.walk(src_dir):
+        for fname in files:
+            if not fname.endswith(".c"):
+                continue
+            path = os.path.join(root, fname)
+            try:
+                content = read_file(path)
+
+                # Quick pre-filter: lvalue casts always contain *)x +=
+                if "*)" not in content or "+=" not in content:
+                    continue
+
+                patched = LVALUE_CAST_RE.sub(_rewrite_lvalue_cast, content)
+                patch_summary(path, content, patched)
+                if patched != content:
+                    write_file(path, patched)
+
+            except Exception as exc:
+                print(f"  [ERROR]   {path}: {exc}", file=sys.stderr)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Main
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -218,6 +320,12 @@ def patch_source(
 
     print("\n=== Step 4: Fix (u32) pointer-truncation casts in src/*.c ===")
     patch_u32_casts(src_dir)
+
+    print("\n=== Step 5: Guard PACKED macro in include/gba/defines.h ===")
+    patch_gba_defines_h(include_dir)
+
+    print("\n=== Step 6: Rewrite lvalue casts  (TYPE*)ptr += n  in src/*.c ===")
+    patch_lvalue_casts(src_dir)
 
     print("\n64-bit Porting Patch Applied Successfully.")
 
