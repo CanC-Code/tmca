@@ -11,20 +11,31 @@
 extern uint8_t* gRomBaseAddress;
 
 // 2. Width-Agnostic Types
-typedef uintptr_t ptr_t; 
+typedef uintptr_t ptr_t;
 typedef uintptr_t addr_t;
 
 // 3. Pointer Compression & Structural Integrity
+//
+// PACKED is defined HERE first, with the Android-safe form that adds
+// aligned(1) and __may_alias__.  The GBA-side header (gba/defines.h)
+// uses a plain #define without a guard and would silently clobber this
+// with the weaker form — so source_patcher.py wraps that definition in
+// #ifndef PACKED / #endif at patch time.
 #ifdef __ANDROID__
+    #ifndef PACKED
     #define PACKED __attribute__((packed, aligned(1), __may_alias__))
+    #endif
+
     // Forces pointers inside structs to stay 4 bytes.
     #define GBA_PTR(type) uint32_t
-    
+
     // Safety Macro: Converts a 32-bit GBA ROM offset to a 64-bit Android pointer.
     // Masks with 0x01FFFFFF to remove the GBA's bank prefix (0x08).
     #define RESOLVE_ROM_PTR(offset) ((void*)(gRomBaseAddress + ((uint32_t)(offset) & 0x01FFFFFF)))
 #else
-    #define PACKED 
+    #ifndef PACKED
+    #define PACKED
+    #endif
     #define GBA_PTR(type) type*
     #define RESOLVE_ROM_PTR(offset) (offset)
 #endif
@@ -33,17 +44,25 @@ typedef uintptr_t addr_t;
 #define FROM_GBA_PTR(base, offset) ((void*)((uintptr_t)(base) + (uintptr_t)(offset)))
 #define TO_GBA_PTR(base, ptr)      ((uint32_t)((uintptr_t)(ptr) - (uintptr_t)(base)))
 
-// 5. Safe Arithmetic
-#define ADVANCE_PTR(ptr, bytes) (ptr = (void*)((uintptr_t)(ptr) + (uintptr_t)(bytes)))
+// 5. Safe Pointer Arithmetic
+// Use this instead of the GBA-era lvalue-cast idiom:
+//   WRONG (clang error): (u8*)ptr += n;
+//   RIGHT:               ADVANCE_PTR(ptr, n);
+#define ADVANCE_PTR(ptr, bytes) ((ptr) = (void*)((uintptr_t)(ptr) + (uintptr_t)(bytes)))
 
 // 6. Standard GBA Types
+//
+// IMPORTANT — sign parity with gba/types.h:
+//   gba/types.h:  typedef u32   bool32;   (u32 = uint32_t → unsigned)
+//   This file must match; using int32_t here causes a clang hard-error:
+//   "typedef redefinition with different types".
 typedef uint32_t u32;
 typedef uint16_t u16;
 typedef uint8_t  u8;
 typedef int32_t  s32;
 typedef int16_t  s16;
 typedef int8_t   s8;
-typedef int32_t  bool32;
+typedef uint32_t bool32;  // must be unsigned — matches gba/types.h `typedef u32 bool32`
 typedef uint8_t  bool8;
 
 #define UNUSED __attribute__((unused))
