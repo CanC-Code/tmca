@@ -4,13 +4,14 @@ runtime/source_patcher.py
 
 Responsibility: 
 1. Fix 64-bit C compliance (pointers, casts, assertions).
-2. Stub asset headers AND translation binaries.
-3. Neuter devkitPro and skip C++ tool execution.
+2. Stub asset headers, translation binaries, and build sentinels.
+3. Neuter devkitPro and skip all C++ tool execution.
 """
 
 import os
 import re
 import sys
+from pathlib import Path
 
 def read_file(path: str) -> str:
     if not os.path.exists(path): return ""
@@ -22,7 +23,7 @@ def write_file(path: str, content: str) -> None:
         fh.write(content)
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 0. Build System Neuter (Bypass Toolchain, CMake, and Tool Execution)
+# 0. Build System Neuter (Bypass Toolchain and Sentinel Checks)
 # ──────────────────────────────────────────────────────────────────────────────
 
 def patch_makefiles():
@@ -38,37 +39,48 @@ def patch_makefiles():
     for mf_path in ["Makefile", "GBA.mk"]:
         if os.path.exists(mf_path):
             content = read_file(mf_path)
-            # Skip building tools
             content = content.replace("build: tools", "build:")
             content = content.replace("extract_assets: tools", "extract_assets:")
-            # Comment out calls to any tools in the tools/bin directory
+            # Comment out tool binary calls
             content = content.replace("\ttools/bin/", "\t# tools/bin/")
             content = content.replace("\tcmake", "\t# cmake")
             write_file(mf_path, content)
             print(f"  [PATCHED] {mf_path}")
 
 def stub_build_artifacts(include_dir: str = "include"):
-    """Stub headers and binary artifacts for SAF runtime loading."""
-    # Header Stubs
+    """Stub headers, binaries, and sentinel files to satisfy Make."""
+    # 1. Header Stubs
     asset_dir = os.path.join(include_dir, "assets")
-    if not os.path.exists(asset_dir): os.makedirs(asset_dir)
+    os.makedirs(asset_dir, exist_ok=True)
     for h in ["map_offsets.h", "gfx_offsets.h"]:
         path = os.path.join(asset_dir, h)
         if not os.path.exists(path):
             write_file(path, "#ifndef ASSET_OFFSETS_H\n#define ASSET_OFFSETS_H\n#endif\n")
-            print(f"  [STUB]    {path}")
-
-    # Translation Binary Stubs (Fixes: translations/USA.bin error)
+    
+    # 2. Translation Binary Stubs
     trans_dir = "translations"
-    if not os.path.exists(trans_dir): os.makedirs(trans_dir)
+    os.makedirs(trans_dir, exist_ok=True)
     for b in ["USA.bin", "EU.bin", "JP.bin"]:
         path = os.path.join(trans_dir, b)
         if not os.path.exists(path):
-            write_file(path, "\x00" * 4) # Small dummy binary
-            print(f"  [STUB]    {path}")
+            write_file(path, "\x00" * 4)
+
+    # 3. Build Sentinels (Fixes: build/USA/extracted_assets_USA error)
+    # This tricks Make into thinking asset_processor already ran.
+    for region in ["USA", "EU", "JP"]:
+        sentinel_dir = f"build/{region}"
+        os.makedirs(sentinel_dir, exist_ok=True)
+        # Create the sentinel file
+        sentinel_file = os.path.join(sentinel_dir, f"extracted_assets_{region}")
+        if not os.path.exists(sentinel_file):
+            write_file(sentinel_file, "Stubbed by patcher")
+            print(f"  [SENTINEL] {sentinel_file}")
+        
+        # Ensure the assets subdirectory exists so the compiler can find the includes
+        os.makedirs(os.path.join(sentinel_dir, "assets"), exist_ok=True)
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 1-6. 64-bit Porting Logic (Pointers, Assertions, Casts)
+# 1-6. 64-bit Porting Logic
 # ──────────────────────────────────────────────────────────────────────────────
 
 def patch_main_c(src_dir):
