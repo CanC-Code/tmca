@@ -4,8 +4,8 @@ runtime/source_patcher.py
 
 Responsibility: 
 1. Fix 64-bit C compliance (pointers, casts, assertions).
-2. Stub asset headers and bypass broken C++ tools.
-3. Neuter devkitPro/arm-none-eabi toolchain checks for Android-only builds.
+2. Stub asset headers AND translation binaries.
+3. Neuter devkitPro and skip C++ tool execution.
 """
 
 import os
@@ -22,32 +22,34 @@ def write_file(path: str, content: str) -> None:
         fh.write(content)
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 0. Build System Neuter (Bypass GBA Toolchain & CMake)
+# 0. Build System Neuter (Bypass Toolchain, CMake, and Tool Execution)
 # ──────────────────────────────────────────────────────────────────────────────
 
 def patch_makefiles():
     """Removes devkitPro requirements and skips broken C++ tools."""
-    # 1. Neuter Toolchain.mk (Fixes: arm-none-eabi-gcc not found)
+    # 1. Neuter Toolchain.mk
     tc_path = "Toolchain.mk"
     if os.path.exists(tc_path):
-        content = read_file(tc_path)
-        # Comment out the error checks for the GBA compiler
-        content = content.replace("$(error arm-none-eabi-gcc not found", "# $(error arm-none-eabi-gcc not found")
+        content = read_file(tc_path).replace("$(error arm-none-eabi-gcc not found", "# $(error")
         write_file(tc_path, content)
-        print(f"  [PATCHED] {tc_path} (Bypassed GBA toolchain check)")
+        print(f"  [PATCHED] {tc_path}")
 
-    # 2. Neuter Makefile (Bypasses broken CMake tools)
-    mf_path = "Makefile"
-    if os.path.exists(mf_path):
-        content = read_file(mf_path)
-        content = content.replace("build: tools", "build:")
-        content = content.replace("extract_assets: tools", "extract_assets:")
-        content = content.replace("\tcmake", "\t# cmake")
-        write_file(mf_path, content)
-        print(f"  [PATCHED] {mf_path} (Bypassed tools build)")
+    # 2. Neuter Makefile and GBA.mk to skip tool execution
+    for mf_path in ["Makefile", "GBA.mk"]:
+        if os.path.exists(mf_path):
+            content = read_file(mf_path)
+            # Skip building tools
+            content = content.replace("build: tools", "build:")
+            content = content.replace("extract_assets: tools", "extract_assets:")
+            # Comment out calls to any tools in the tools/bin directory
+            content = content.replace("\ttools/bin/", "\t# tools/bin/")
+            content = content.replace("\tcmake", "\t# cmake")
+            write_file(mf_path, content)
+            print(f"  [PATCHED] {mf_path}")
 
-def stub_assets(include_dir: str = "include"):
-    """Stub headers for SAF runtime loading."""
+def stub_build_artifacts(include_dir: str = "include"):
+    """Stub headers and binary artifacts for SAF runtime loading."""
+    # Header Stubs
     asset_dir = os.path.join(include_dir, "assets")
     if not os.path.exists(asset_dir): os.makedirs(asset_dir)
     for h in ["map_offsets.h", "gfx_offsets.h"]:
@@ -56,8 +58,17 @@ def stub_assets(include_dir: str = "include"):
             write_file(path, "#ifndef ASSET_OFFSETS_H\n#define ASSET_OFFSETS_H\n#endif\n")
             print(f"  [STUB]    {path}")
 
+    # Translation Binary Stubs (Fixes: translations/USA.bin error)
+    trans_dir = "translations"
+    if not os.path.exists(trans_dir): os.makedirs(trans_dir)
+    for b in ["USA.bin", "EU.bin", "JP.bin"]:
+        path = os.path.join(trans_dir, b)
+        if not os.path.exists(path):
+            write_file(path, "\x00" * 4) # Small dummy binary
+            print(f"  [STUB]    {path}")
+
 # ──────────────────────────────────────────────────────────────────────────────
-# 1-6. 64-bit Porting Logic
+# 1-6. 64-bit Porting Logic (Pointers, Assertions, Casts)
 # ──────────────────────────────────────────────────────────────────────────────
 
 def patch_main_c(src_dir):
@@ -112,9 +123,9 @@ def patch_lvalue_casts(src_dir):
 # ──────────────────────────────────────────────────────────────────────────────
 
 def patch_source(src_dir="src", include_dir="include"):
-    print("=== Step 0: Neutering Build System & Assets ===")
+    print("=== Step 0: Neutering Build System & Artifacts ===")
     patch_makefiles()
-    stub_assets(include_dir)
+    stub_build_artifacts(include_dir)
 
     print("\n=== Step 1-6: Porting C Source to 64-bit NDK ===")
     patch_main_c(src_dir)
